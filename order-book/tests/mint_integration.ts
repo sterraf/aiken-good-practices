@@ -8,7 +8,9 @@ import {
 } from "https://deno.land/x/lucid@0.20.5/mod.ts";
 import {
   OrderOrderSpend,
-  OrderOrderDatum,
+  Order_6OrderSpend,
+  Order_6OrderDatum,
+  Order_6OrderMint,
 } from "../plutus.ts";
 
 const tokenAPolicy = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -64,13 +66,18 @@ const lucid2 = new Lucid({
 //
 // CREATE ORDER: OFFER 1234 A FOR 4242 B
 //
-const orderValidator = new OrderOrderSpend();
-const orderAddress = lucid1.newScript(orderValidator).toAddress();
-const orderHash = lucid1.newScript(orderValidator).toHash();
-const validityToken = orderHash + fromText("val");
+const orderMint = new Order_6OrderMint;
+const orderMintHash = lucid1.newScript(orderMint).toHash();
+const validityToken = orderMintHash + fromText("val");
 
+const orderValidator = new Order_6OrderSpend();
+const orderAddress = lucid1.newScript(orderValidator).toAddress();
+const orderWrongValidator = new OrderOrderSpend();
+const orderWrongAddress = lucid1.newScript(orderWrongValidator).toAddress();
+
+console.log("Spend script address:", orderAddress)
 const { payment } = Addresses.inspect(address1);
-const orderDatum: OrderOrderDatum = {
+const orderDatum: Order_6OrderDatum = {
   owner: payment.hash,
   amount: 4242n,
   policyId: tokenBPolicy,
@@ -83,16 +90,16 @@ const orderDatum: OrderOrderDatum = {
 
 const createTx = await lucid1
   .newTx()
-  .attachScript(orderValidator)
   .mint(
     {
       [validityToken]: 1n,
     },
     Data.void()
   )
+  .attachScript(orderMint)
   .payToContract(
     orderAddress,
-    { Inline: Data.to(orderDatum, OrderOrderSpend.datum) },
+    { Inline: Data.to(orderDatum, Order_6OrderSpend.datum) },
     {
       [validityToken]: 1n,
       [tokenA]: 1234n,
@@ -103,7 +110,7 @@ const createTx = await lucid1
 const signedCreateTx = await createTx.sign().commit();
 const createTxHash = await signedCreateTx.submit();
 
-// console.log("CREATE TX:", signedCreateTx.toString());
+console.log("SIGNED CREATE ORDER TX:", signedCreateTx.toString());
 console.log("CREATE ORDER TX HASH:", createTxHash);
 
 emulator.awaitTx(createTxHash);
@@ -116,7 +123,7 @@ const [order] = await lucid2.utxosByOutRef([{
   outputIndex: 0,
 }]);
 
-const orderDatum2: OrderOrderDatum = {
+const orderDatum2: Order_6OrderDatum = {
   owner: payment.hash,
   amount: 4242n,
   policyId: tokenBPolicy,
@@ -132,11 +139,11 @@ const resolveTx = await lucid2
   .attachScript(orderValidator)
   .collectFrom(
     [order],
-    Data.to({Resolve: [0n]}, OrderOrderSpend.redeemer)
+    Data.to({Resolve: [0n]}, Order_6OrderSpend.redeemer)
   )
   .payToContract(
     orderAddress,
-    { Inline: Data.to(orderDatum2, OrderOrderSpend.datum) },
+    { Inline: Data.to(orderDatum2, Order_6OrderSpend.datum) },
     {
       [validityToken]: 1n,
       [tokenB]: 4300n,
@@ -147,5 +154,5 @@ const resolveTx = await lucid2
 const signedResolveTx = await resolveTx.sign().commit();
 const resolveTxHash = await signedResolveTx.submit();
 
-// console.log("RESOLVE TX:", signedResolveTx.toString());
+console.log("SIGNED RESOLVE TX:", signedResolveTx.toString());
 console.log("RESOLVE TX HASH:", resolveTxHash);
